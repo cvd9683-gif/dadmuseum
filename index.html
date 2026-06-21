@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>The Dad Museum</title>
+
+<!-- ─── Fonts (degrades gracefully to system serif if offline) ─── -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;0,900;1,500;1,700&family=Inter:wght@400;500;600;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Special+Elite&display=swap" rel="stylesheet">
+
+<style>
+/* ════════════════════════════════════════════════════════════════════
+   THE DAD MUSEUM
+   A single-page Father's Day experience.
+   Sections: Entrance → Admission Quiz → Ticket → Doors → Plaque → Gallery → Final
+   Photo data is loaded from data.js (regenerate with ./generate-data.sh).
+   ════════════════════════════════════════════════════════════════════ */
+
+:root{
+  --wall-1:#efe6cf;          /* warm beige wall, top */
+  --wall-2:#e3d3b2;          /* warm beige wall, mid */
+  --wall-3:#d3bd96;          /* warm beige wall, low */
+  --wood-1:#5a3c22;          /* floor wood, near */
+  --wood-2:#3c2715;          /* floor wood, far */
+  --ink:#2a2018;             /* dark warm text */
+  --cream:#f4ead2;           /* matting / paper */
+  --gold-deep:#8a6b22;
+  --gold-mid:#c79a3a;
+  --gold-light:#f6e6ad;
+  --red:#9e2b25;             /* ticket ink */
+  --bg-dark:#161009;         /* entrance near-black */
+  --shadow:0 22px 50px rgba(0,0,0,.55);
+  --serif-display:"Playfair Display", Georgia, "Times New Roman", serif;
+  --serif-body:"Cormorant Garamond", Georgia, serif;
+  --sans:"Inter", -apple-system, BlinkMacSystemFont, "Avenir Next", "Segoe UI", sans-serif;
+  --type:"Special Elite", "Courier New", monospace;
+}
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  font-family:var(--sans);
+  font-weight:500;
+  background:var(--bg-dark);
+  color:var(--ink);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
+img{display:block;}
+
+/* ─── Screen system: each major section is a full-viewport layer ─── */
+.screen{
+  position:fixed; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  padding:max(24px,4vh) 20px;
+  opacity:0; visibility:hidden; pointer-events:none;
+  overflow-y:auto;
+  transition:opacity .9s ease, visibility .9s ease;
+  z-index:1;
+}
+.screen.active{opacity:1; visibility:visible; pointer-events:auto; z-index:2;}
+
+/* ─── Reusable gold museum frame ───
+   An intricate layered-gold CSS border that hugs the photo (the image defines
+   the size; the frame wraps it). Warm bevels + drop shadow, kept fairly thin.
+   Used by the quiz, gallery, lightbox & final piece. */
+.frame{
+  position:relative;
+  padding:clamp(7px,1.3vw,15px);
+  border-radius:4px;
+  background:
+    linear-gradient(135deg,#6e521b 0%,#e7cd86 13%,#fff7da 26%,var(--gold-mid) 45%,
+                    #876820 62%,#edd388 80%,#5a4216 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,247,212,.75),
+    inset 0 0 0 3px rgba(95,66,14,.42),
+    inset 0 0 0 4px rgba(255,244,205,.55),
+    inset 0 0 0 7px rgba(95,66,14,.30),
+    inset 0 0 0 8px rgba(255,244,205,.35),
+    0 20px 44px rgba(0,0,0,.52), 0 5px 13px rgba(0,0,0,.42);
+}
+/* subtle decorative corner ticks */
+.frame::after{
+  content:""; position:absolute; inset:clamp(5px,1vw,11px); pointer-events:none; border-radius:3px;
+  background-repeat:no-repeat;
+  background-image:
+    radial-gradient(circle at 0 0,       rgba(255,249,216,.9) 0 2px, rgba(120,86,24,.7) 3px 5px, transparent 6px),
+    radial-gradient(circle at 100% 0,    rgba(255,249,216,.9) 0 2px, rgba(120,86,24,.7) 3px 5px, transparent 6px),
+    radial-gradient(circle at 0 100%,    rgba(255,249,216,.9) 0 2px, rgba(120,86,24,.7) 3px 5px, transparent 6px),
+    radial-gradient(circle at 100% 100%, rgba(255,249,216,.9) 0 2px, rgba(120,86,24,.7) 3px 5px, transparent 6px);
+}
+.frame .mat{
+  position:relative; z-index:1;
+  background:var(--cream);
+  padding:clamp(7px,1.2vw,15px);
+  box-shadow:inset 0 0 0 1px rgba(120,90,40,.35), inset 0 2px 10px rgba(0,0,0,.18);
+}
+.frame img{width:100%;height:100%;object-fit:cover;display:block;}
+
+/* Primary museum button */
+.btn{
+  font-family:var(--sans); font-weight:700;
+  letter-spacing:.01em;
+  font-size:clamp(1.02rem,2.4vw,1.2rem);
+  color:#23190d;
+  padding:.85em 2.1em;
+  border-radius:2px;
+  background:linear-gradient(180deg,var(--gold-light),var(--gold-mid) 55%,var(--gold-deep));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 4px rgba(80,55,10,.4),
+             0 10px 24px rgba(0,0,0,.45);
+  transition:transform .25s ease, filter .25s ease;
+}
+.btn:hover{transform:translateY(-2px); filter:brightness(1.06);}
+.btn:active{transform:translateY(0);}
+.btn.ghost{
+  background:transparent; color:var(--gold-light);
+  box-shadow:inset 0 0 0 1.5px rgba(246,230,173,.55);
+  font-weight:500;
+}
+.btn.ghost:hover{box-shadow:inset 0 0 0 1.5px var(--gold-light); filter:none;}
+
+/* ════════════ SECTION 1 — ENTRANCE ════════════ */
+#entrance{
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(255,236,190,.18), transparent 55%),
+    radial-gradient(60% 50% at 50% 38%, rgba(255,228,170,.10), transparent 70%),
+    linear-gradient(180deg,#1c140b 0%, #120c06 60%, #0c0804 100%);
+}
+.entrance-inner{
+  text-align:center; max-width:780px;
+  animation:fadeUp 1.4s ease both;
+}
+.entrance-eyebrow{
+  font-family:var(--type); letter-spacing:.42em; text-transform:uppercase;
+  font-size:clamp(.6rem,1.6vw,.78rem); color:#caa85f; opacity:.85;
+  margin-bottom:1.4rem; padding-left:.42em;
+}
+.entrance-title{
+  font-family:var(--serif-display); font-weight:900;
+  font-size:clamp(2.8rem,9vw,6.2rem); line-height:.95;
+  letter-spacing:.01em;
+  background:linear-gradient(180deg,#fbeec0,#d7af52 60%,#a87f2c);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  text-shadow:0 2px 30px rgba(214,170,80,.25);
+}
+.entrance-rule{
+  width:min(280px,60%); height:1px; margin:1.6rem auto;
+  background:linear-gradient(90deg,transparent,var(--gold-mid),transparent);
+}
+.entrance-sub{
+  font-family:var(--serif-body);
+  font-size:clamp(1.2rem,3.4vw,1.7rem); color:#ece0c6; font-weight:500;
+  font-style:italic; letter-spacing:.01em; margin-bottom:2.6rem;
+}
+#entrance .btn{animation:glowPulse 3.2s ease-in-out infinite;}
+
+/* ════════════ SECTION 2 — QUIZ ════════════ */
+#quiz{
+  background:
+    radial-gradient(100% 70% at 50% -10%, rgba(255,236,190,.16), transparent 55%),
+    linear-gradient(180deg,#1d150c,#100b06);
+  flex-direction:column; justify-content:flex-start;   /* margin:auto centers + scrolls cleanly */
+  padding-bottom:clamp(24px,5vh,48px);                 /* breathing room so Next is never flush/clipped */
+}
+.quiz-wrap{width:min(720px,100%); margin:auto; display:flex; flex-direction:column; align-items:center; gap:clamp(10px,1.8vh,18px);}
+.quiz-top{width:100%; display:flex; justify-content:space-between; align-items:center;
+  font-family:var(--type); color:#cdb074; letter-spacing:.18em; text-transform:uppercase;
+  font-size:clamp(.62rem,2vw,.8rem);}
+.quiz-progress-track{flex:1; height:3px; margin:0 14px; background:rgba(205,176,116,.22); border-radius:3px; overflow:hidden;}
+.quiz-progress-fill{height:100%; width:0; background:linear-gradient(90deg,var(--gold-mid),var(--gold-light)); transition:width .5s ease;}
+
+/* image + controls. On wide screens they sit side-by-side so the whole quiz
+   fits without scrolling; on narrow screens they stack. */
+.quiz-main{width:100%; display:flex; flex-direction:column; align-items:center;
+  gap:clamp(12px,2.4vh,22px);}
+.quiz-figure{flex:0 0 auto;}
+.quiz-side{width:100%; display:flex; flex-direction:column; align-items:center;
+  gap:clamp(10px,1.8vh,18px);}
+@media (min-width:760px){
+  .quiz-main{flex-direction:row; align-items:center; justify-content:center;
+    gap:clamp(22px,3.2vw,52px);}
+  .quiz-side{width:auto; flex:0 1 380px; max-width:420px;}
+}
+.quiz-frame{
+  max-width:min(92vw,940px);
+  animation:fadeSlide .7s ease both;
+}
+.quiz-frame .mat{overflow:hidden;}
+/* the port's pixel size is set by JS to match each photo's real aspect ratio,
+   so the gold frame hugs the photo and the full reveal is never cropped */
+.quiz-photo-port{
+  position:relative; overflow:hidden;
+  width:min(86vw,640px); height:min(64vw,480px);   /* fallback before JS sizes it */
+  background:#e7dcc2;
+}
+/* The cropped clue (cover) sits ON TOP and is the ONLY thing shown before the
+   user answers. The full photo sits beneath with no src + opacity 0, so it is
+   never visible early — not even preloaded into view (preloaded off-DOM by JS).
+   On answer, JS gives the full image a starting transform zoomed into the crop
+   region (transform-origin: cropX% cropY%, scale: cropScale), fades the crop out
+   quickly, then animates the full to scale(1) — a camera zoom-out reveal. */
+.quiz-crop,.quiz-full{
+  position:absolute; inset:0; width:100%; height:100%;
+  will-change:transform,opacity;
+}
+.quiz-crop{object-fit:cover; opacity:1; z-index:2; transition:opacity .4s ease;}
+.quiz-full{object-fit:contain; opacity:0; z-index:1; background:#e7dcc2;}
+.quiz-photo-port.revealed .quiz-crop{opacity:0;}
+.quiz-spot{position:absolute; left:50%; top:-30%; transform:translateX(-50%);
+  width:120%; height:80%; pointer-events:none; z-index:3;
+  background:radial-gradient(ellipse 50% 70% at 50% 0,rgba(255,247,220,.5),transparent 65%);}
+
+.quiz-q{font-family:var(--serif-display); font-weight:700; color:#f0e3c4;
+  font-size:clamp(1.2rem,4vw,1.6rem); text-align:center; margin:.2rem 0;}
+/* feedback reads like a clear museum stamp/label, well separated from buttons */
+.quiz-feedback{
+  margin:clamp(8px,1.6vh,16px) 0 clamp(2px,1vh,8px);
+  min-height:2.2em; text-align:center;
+  display:flex; flex-direction:column; align-items:center; gap:.18rem;
+  opacity:0; transform:translateY(8px); transition:opacity .4s ease, transform .4s ease;
+}
+.quiz-feedback.show{opacity:1; transform:none;}
+.fb-big{font-family:var(--serif-display); font-weight:800; line-height:1;
+  font-size:clamp(1.55rem,5.6vw,2.35rem); letter-spacing:.01em;}
+.fb-sub{font-family:var(--sans); font-weight:600; color:#ece0c4;
+  font-size:clamp(1.02rem,3.2vw,1.26rem);}
+.quiz-feedback.right .fb-big{color:#8fd18a;}
+.quiz-feedback.wrong .fb-big{color:#eaa07e;}
+/* manual advance button shown after the reveal */
+.quiz-next{margin-top:clamp(4px,1vh,10px); opacity:0; transform:translateY(8px);
+  pointer-events:none; transition:opacity .45s ease, transform .45s ease;}
+.quiz-next.show{opacity:1; transform:none; pointer-events:auto;}
+
+.quiz-options{
+  display:grid; grid-template-columns:repeat(2,1fr); gap:clamp(8px,1.6vw,14px);
+  width:min(440px,86vw);
+}
+.quiz-side .quiz-options{width:100%;}
+.quiz-next{width:100%; max-width:440px;}
+@media (min-width:760px){ .quiz-options{width:100%;} }
+.opt{
+  font-family:var(--sans); font-weight:600;
+  font-size:clamp(1rem,3vw,1.18rem);
+  color:#f7eed6; padding:.95em .6em; border-radius:3px;
+  background:linear-gradient(180deg,rgba(255,247,220,.08),rgba(255,247,220,.02));
+  box-shadow:inset 0 0 0 1.5px rgba(214,178,90,.4);
+  transition:transform .18s ease, box-shadow .25s ease, background .25s ease;
+}
+.opt:hover:not(:disabled){transform:translateY(-2px); box-shadow:inset 0 0 0 1.5px var(--gold-light);}
+.opt:disabled{cursor:default;}
+.opt.correct{background:linear-gradient(180deg,#3f6f3a,#2f5a2c); box-shadow:inset 0 0 0 1.5px #9fe098; color:#eafce6;}
+.opt.incorrect{background:linear-gradient(180deg,#7a302a,#5e231f); box-shadow:inset 0 0 0 1.5px #e9a78c; color:#fbe7df;}
+
+/* ════════════ RETRY ════════════ */
+#retry{background:linear-gradient(180deg,#1a120a,#0d0905); text-align:center;}
+.retry-inner{max-width:560px; animation:fadeUp 1s ease both;}
+.retry-stamp{
+  display:inline-block; font-family:var(--type); letter-spacing:.18em;
+  color:#d98a6e; border:2px solid #b85b46; padding:.5em 1em; border-radius:3px;
+  transform:rotate(-4deg); margin-bottom:1.8rem; text-transform:uppercase;
+  font-size:clamp(.7rem,2vw,.9rem); opacity:.9;
+}
+.retry-title{font-family:var(--serif-display); font-weight:900; color:#f0e3c4;
+  font-size:clamp(2rem,7vw,3.4rem); line-height:1; margin-bottom:1.2rem;}
+.retry-sub{font-size:clamp(1.05rem,3.4vw,1.4rem); color:#d8c8a8; font-style:italic; margin-bottom:2.2rem;}
+
+/* ════════════ SECTION 3 — TICKET ════════════ */
+#ticket{
+  background:
+    radial-gradient(100% 70% at 50% 0,rgba(255,236,190,.14),transparent 55%),
+    linear-gradient(180deg,#1a120a,#0c0804);
+  flex-direction:column; gap:2rem;
+}
+.ticket-card{
+  position:relative;
+  width:min(560px,92vw);
+  background:
+    radial-gradient(120% 140% at 0 0,rgba(255,255,255,.5),transparent 40%),
+    linear-gradient(165deg,#f7eed5,#e9d9b6);
+  color:#5b2b22;
+  border-radius:8px;
+  padding:clamp(22px,4vw,34px);
+  display:grid; grid-template-columns:1fr auto; gap:clamp(16px,3vw,30px);
+  box-shadow:var(--shadow), inset 0 0 0 2px rgba(158,43,37,.5), inset 0 0 0 5px rgba(158,43,37,.18);
+  transform:rotate(-1.2deg) scale(.7); opacity:0;
+  animation:ticketIn 1.1s cubic-bezier(.2,.8,.3,1) .15s forwards;
+}
+/* perforation notches between stub and body */
+.ticket-card::before,.ticket-card::after{
+  content:""; position:absolute; right:clamp(150px,30%,200px);
+  width:26px; height:26px; border-radius:50%;
+  background:#0c0804; transform:translateX(50%);
+}
+.ticket-card::before{top:-13px;}
+.ticket-card::after{bottom:-13px;}
+.ticket-main{padding-right:clamp(8px,2vw,16px);}
+.ticket-kicker{font-family:var(--type); letter-spacing:.2em; text-transform:uppercase;
+  font-size:clamp(.6rem,1.8vw,.72rem); color:#9e2b25; margin-bottom:.5rem;}
+.ticket-title{font-family:var(--serif-display); font-weight:900; line-height:.92;
+  font-size:clamp(1.8rem,6vw,2.9rem); color:#7a221d; margin-bottom:.6rem;}
+.ticket-admit{font-family:var(--type); letter-spacing:.3em; font-size:clamp(.9rem,3vw,1.2rem);
+  color:#9e2b25; border-top:2px dashed rgba(158,43,37,.5); border-bottom:2px dashed rgba(158,43,37,.5);
+  padding:.5em 0; margin:.5em 0 .8em; text-transform:uppercase;}
+.ticket-line{font-size:clamp(1rem,3vw,1.25rem); font-style:italic; color:#5b2b22;}
+.ticket-score{font-family:var(--type); font-size:clamp(.85rem,2.6vw,1rem); margin-top:.9rem; color:#7a221d;}
+.ticket-stub{
+  border-left:3px dotted rgba(158,43,37,.55);
+  padding-left:clamp(14px,3vw,26px);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.4rem;
+  text-align:center;
+}
+.ticket-stub .no{writing-mode:vertical-rl; font-family:var(--type); letter-spacing:.25em;
+  color:#9e2b25; font-size:clamp(.62rem,1.8vw,.74rem); text-transform:uppercase;}
+.ticket-stamp{
+  width:clamp(74px,16vw,96px); aspect-ratio:1; border-radius:50%;
+  border:2px solid rgba(158,43,37,.6); color:rgba(158,43,37,.85);
+  display:flex; align-items:center; justify-content:center; text-align:center;
+  font-family:var(--type); font-size:clamp(.5rem,1.5vw,.6rem); letter-spacing:.12em;
+  line-height:1.25; text-transform:uppercase; transform:rotate(-12deg);
+  box-shadow:inset 0 0 0 3px rgba(158,43,37,.18);
+}
+
+/* ════════════ SECTION 4 — DOORS ════════════ */
+#doors{
+  background:radial-gradient(120% 90% at 50% 50%,#6b4f2c,#1a120a);
+  perspective:1400px; overflow:hidden; padding:0;
+}
+.door-scene{position:absolute; inset:0; display:flex; transform-style:preserve-3d;
+  transition:transform 2.4s ease, filter 2.4s ease;}
+#doors.go .door-scene{transform:translateZ(360px); filter:brightness(1.25);}
+/* warm interior visible as doors part */
+.door-interior{position:absolute; inset:0;
+  background:
+    radial-gradient(80% 60% at 50% 40%,rgba(255,238,200,.85),rgba(255,224,170,.3) 60%,transparent),
+    linear-gradient(180deg,var(--wall-1),var(--wall-3) 70%, #3c2715);}
+.door{
+  position:relative; z-index:2; flex:1; height:100%;
+  background:
+    repeating-linear-gradient(90deg, rgba(0,0,0,.10) 0 2px, transparent 2px 26px),
+    linear-gradient(180deg,#4a311c,#3a2616 50%,#2c1c10);
+  background-color:#3a2616;
+  box-shadow:inset 0 0 60px rgba(0,0,0,.6);
+  transition:transform 2.4s cubic-bezier(.6,.02,.2,1);
+}
+.door::after{content:""; position:absolute; top:14%; bottom:14%; width:38%;
+  left:50%; transform:translateX(-50%);
+  border:3px solid rgba(201,154,58,.45);
+  box-shadow:inset 0 0 0 6px rgba(201,154,58,.15);}
+.door.left{transform-origin:left center;}
+.door.right{transform-origin:right center;}
+#doors.go .door.left{transform:rotateY(-115deg);}
+#doors.go .door.right{transform:rotateY(115deg);}
+.door-handle{position:absolute; top:50%; width:14px; height:60px; border-radius:8px;
+  background:linear-gradient(180deg,var(--gold-light),var(--gold-deep)); transform:translateY(-50%);
+  box-shadow:0 0 10px rgba(0,0,0,.5);}
+.door.left .door-handle{right:12px;}
+.door.right .door-handle{left:12px;}
+
+/* ════════════ SECTION 5 — PLAQUE ════════════ */
+#plaque{
+  background:
+    radial-gradient(90% 70% at 50% 20%,rgba(255,240,205,.5),transparent 60%),
+    linear-gradient(180deg,var(--wall-1),var(--wall-2) 55%, var(--wall-3) 68%, var(--wood-1) 68%, var(--wood-2));
+  flex-direction:column;
+}
+.plaque-stand{display:flex; flex-direction:column; align-items:center;
+  animation:fadeUp 1.2s ease .2s both; max-width:680px; width:100%;}
+.plaque-board{
+  position:relative; width:100%;
+  background:linear-gradient(160deg,#33271a,#241a10);
+  color:#f0e3c4; border-radius:6px;
+  padding:clamp(26px,5vw,46px) clamp(22px,5vw,52px);
+  box-shadow:var(--shadow), inset 0 0 0 2px rgba(201,154,58,.6), inset 0 0 0 6px rgba(201,154,58,.18);
+  text-align:center;
+}
+.plaque-board::before{content:"✦"; display:block; color:var(--gold-mid); font-size:1.4rem; margin-bottom:.6rem;}
+.plaque-title{font-family:var(--serif-display); font-weight:700; color:var(--gold-light);
+  font-size:clamp(1.7rem,5.5vw,2.7rem); margin-bottom:1.1rem; line-height:1.05;}
+.plaque-body{font-family:var(--sans); font-weight:500;
+  font-size:clamp(1.12rem,3vw,1.4rem); line-height:1.7; color:#f1e6cd;}
+.plaque-body p+p{margin-top:1.05rem;}
+.plaque-note{margin-top:1.3rem; font-weight:600; font-size:clamp(1rem,2.5vw,1.18rem); color:#e3c074;}
+.plaque-legs{width:62%; height:clamp(26px,5vh,52px);
+  background:linear-gradient(180deg,#2a1c10,#1a1009);
+  clip-path:polygon(8% 0,92% 0,100% 100%,0 100%);
+  box-shadow:0 16px 26px rgba(0,0,0,.4);}
+.plaque-base{width:74%; height:10px; border-radius:50%;
+  background:radial-gradient(rgba(0,0,0,.45),transparent 70%); margin-top:-2px;}
+#plaque .btn{margin-top:clamp(22px,4vh,40px);}
+
+/* ════════════ SECTION 6 — GALLERY WALL ════════════ */
+#gallery{padding:0; display:block; background:#0c0804;}
+.wall-scroll{
+  position:absolute; inset:0;
+  overflow-x:auto; overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  scroll-snap-type:x proximity;
+  cursor:grab;
+}
+.wall-scroll.dragging{cursor:grabbing; scroll-snap-type:none;}
+.wall-scroll::-webkit-scrollbar{height:0;}
+.wall-track{
+  position:relative; height:100%;
+  display:flex; align-items:center;
+  gap:clamp(26px,5vw,78px);
+  padding:0 max(8vw,52px) 0 max(8vw,52px);
+  min-width:max-content;
+  background:
+    linear-gradient(180deg, rgba(20,14,8,.55) 0%, rgba(20,14,8,0) 12%),
+    radial-gradient(140% 60% at 50% 0,rgba(255,244,214,.20),transparent 45%),
+    linear-gradient(180deg,var(--wall-1) 0%, var(--wall-2) 50%, var(--wall-3) 70%, var(--wall-3) 72%);
+}
+/* wood floor band travels with the wall */
+.wall-floor{
+  position:absolute; left:0; right:0; bottom:0; height:28%;
+  background:
+    linear-gradient(180deg, rgba(255,235,200,.18) 0 2px, transparent 3px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.16) 0 1px, transparent 1px 90px),
+    linear-gradient(180deg,var(--wood-1),var(--wood-2));
+  box-shadow:inset 0 8px 18px rgba(0,0,0,.4);
+}
+.wall-floor::before{content:""; position:absolute; left:0; right:0; top:-7px; height:7px;
+  background:linear-gradient(180deg,#6e4d2e,#4a311c); background-color:#4a311c;
+  box-shadow:0 -2px 6px rgba(0,0,0,.3);}
+
+.exhibit{
+  position:relative; z-index:1; flex:0 0 auto;
+  scroll-snap-align:center;
+  display:flex; align-items:center;
+  transform:translateY(var(--shift,0));
+}
+/* spotlight pool above each piece */
+.exhibit::before{
+  content:""; position:absolute; left:50%; top:-14%; transform:translateX(-50%);
+  width:150%; height:128%; pointer-events:none; z-index:-1;
+  background:radial-gradient(ellipse 46% 60% at 50% 0,rgba(255,247,222,.55),transparent 62%);
+  filter:blur(4px);
+}
+.exhibit .frame{cursor:zoom-in; transition:transform .35s ease;}
+.exhibit .frame:hover{transform:translateY(-4px) scale(1.012);}
+/* Each photo keeps its real aspect ratio (set via --ar from its dimensions in
+   data.js), so nothing is cropped and the gold frame hugs the image. Setting
+   height + aspect-ratio reserves the correct width BEFORE the image loads, so
+   index-based navigation still centers exactly and never skips. */
+.exhibit .frame img{
+  height:var(--h,46vh); width:auto; aspect-ratio:var(--ar,1.4);
+  max-width:min(94vw,900px); object-fit:contain; display:block; background:#e7dcc2;
+}
+
+/* The final piece on the wall — the climactic exhibit */
+.exhibit.final{ --shift:0; }
+.exhibit.final .frame{cursor:default;}
+.exhibit.final .frame:hover{transform:none;}
+/* brighter, larger spotlight for the finale */
+.exhibit.final::before{
+  width:175%; height:150%; top:-22%;
+  background:radial-gradient(ellipse 50% 62% at 50% 0,rgba(255,247,222,.8),transparent 64%);
+}
+.mat.final-piece{
+  background:
+    radial-gradient(120% 90% at 50% 0,rgba(201,154,58,.18),transparent 60%),
+    linear-gradient(160deg,#3a2c1b,#241a10); color:#f3e7cc;
+  width:min(80vw,600px); padding:clamp(30px,4.5vw,54px); text-align:center;
+}
+.final-piece h2{font-family:var(--serif-display); font-weight:900; color:var(--gold-light);
+  font-size:clamp(2rem,6.5vw,3.3rem); line-height:1.02; margin-bottom:1.2rem;
+  text-shadow:0 2px 24px rgba(214,170,80,.3);}
+.final-piece p{font-family:var(--sans); font-weight:500;
+  font-size:clamp(1.08rem,2.9vw,1.34rem); line-height:1.62; color:#efe2c6;}
+.final-piece p+p{margin-top:.85rem;}
+.final-thanks{font-family:var(--serif-display); color:var(--gold-light) !important;
+  font-weight:700; font-size:1.25em; font-style:italic; margin-top:1rem;}
+.final-joke{margin-top:1.5rem; font-size:clamp(.86rem,2.3vw,1rem); color:#d6b367;
+  font-family:var(--type); letter-spacing:.04em;}
+.exhibit.final .btn{margin-top:1.7rem;}
+
+/* Permanent gallery controls */
+.gallery-controls{
+  position:fixed; left:0; right:0; bottom:0; z-index:6;
+  display:flex; flex-wrap:wrap; justify-content:center; gap:clamp(8px,2vw,16px);
+  padding:14px max(14px,env(safe-area-inset-bottom));
+  padding-bottom:max(14px,env(safe-area-inset-bottom));
+  background:linear-gradient(180deg,transparent,rgba(12,8,4,.82) 40%);
+  opacity:0; visibility:hidden; transition:opacity .6s ease .3s, visibility .6s ease .3s;
+}
+#gallery.active ~ .gallery-controls{opacity:1; visibility:visible;}
+.ctrl{
+  font-family:var(--sans); font-weight:600; letter-spacing:.01em;
+  font-size:clamp(.9rem,2.6vw,1.05rem); color:#f7eed6;
+  padding:.7em 1.2em; border-radius:3px; min-height:48px; white-space:nowrap;
+  background:linear-gradient(180deg,rgba(60,42,22,.92),rgba(36,24,12,.94));
+  box-shadow:inset 0 0 0 1.5px rgba(201,154,58,.55), 0 8px 20px rgba(0,0,0,.45);
+  transition:transform .2s ease, filter .2s ease;
+}
+.ctrl:hover{transform:translateY(-2px); filter:brightness(1.1);}
+.ctrl.final-btn{background:linear-gradient(180deg,#7a221d,#561713);
+  box-shadow:inset 0 0 0 1.5px rgba(233,167,140,.6), 0 8px 20px rgba(0,0,0,.45);}
+.ctrl.on{background:linear-gradient(180deg,#3f6f3a,#2f5a2c);
+  box-shadow:inset 0 0 0 1.5px #9fe098, 0 8px 20px rgba(0,0,0,.45);}
+
+/* ════════════ LIGHTBOX ════════════ */
+#lightbox{
+  position:fixed; inset:0; z-index:20;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; padding:5vh 5vw;
+  background:rgba(8,5,2,.92);
+  opacity:0; visibility:hidden; transition:opacity .4s ease, visibility .4s ease;
+}
+#lightbox.open{opacity:1; visibility:visible;}
+.lightbox-frame{
+  max-width:92vw; max-height:78vh;
+  transform:scale(.88); transition:transform .45s cubic-bezier(.2,.8,.3,1);
+}
+#lightbox.open .lightbox-frame{transform:scale(1);}
+.lightbox-frame .mat{padding:clamp(8px,1.4vw,16px);}
+.lightbox-frame img{
+  max-width:calc(92vw - 60px); max-height:calc(78vh - 60px);
+  width:auto; height:auto; object-fit:contain;
+}
+.lightbox-label{font-family:var(--type); letter-spacing:.22em; text-transform:uppercase;
+  color:#d8bd84; font-size:clamp(.7rem,2vw,.85rem);}
+.lightbox-close{
+  position:fixed; top:16px; right:16px; z-index:21;
+  width:48px; height:48px; border-radius:50%; font-size:1.4rem; color:#f2e7cb;
+  background:rgba(36,24,12,.9); box-shadow:inset 0 0 0 1.5px rgba(201,154,58,.5);
+  display:flex; align-items:center; justify-content:center;
+  transition:transform .2s ease;
+}
+.lightbox-close:hover{transform:rotate(90deg);}
+
+/* ════════════ ANIMATIONS ════════════ */
+@keyframes fadeUp{from{opacity:0; transform:translateY(24px);} to{opacity:1; transform:none;}}
+@keyframes fadeSlide{from{opacity:0; transform:translateX(26px);} to{opacity:1; transform:none;}}
+@keyframes ticketIn{
+  0%{opacity:0; transform:rotate(-9deg) scale(.7);}
+  60%{opacity:1;}
+  100%{opacity:1; transform:rotate(-1.2deg) scale(1);}
+}
+@keyframes glowPulse{
+  0%,100%{box-shadow:inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 4px rgba(80,55,10,.4), 0 10px 24px rgba(0,0,0,.45), 0 0 0 rgba(246,230,173,0);}
+  50%{box-shadow:inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 4px rgba(80,55,10,.4), 0 10px 24px rgba(0,0,0,.45), 0 0 34px rgba(246,230,173,.35);}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001s!important; transition-duration:.1s!important;}
+}
+
+/* ════════════ RESPONSIVE ════════════ */
+@media (max-width:560px){
+  .gallery-controls{gap:6px; padding-left:8px; padding-right:8px;}
+  .ctrl{font-size:.82rem; padding:.62em .72em; min-height:44px;}
+  /* keep answer options 2-up on mobile so the reveal + Next button still fit */
+  .quiz-options{gap:8px;}
+  .opt{font-size:clamp(.92rem,4vw,1.1rem); padding:.8em .4em;}
+  .ticket-card{grid-template-columns:1fr; }
+  .ticket-stub{border-left:none; border-top:3px dotted rgba(158,43,37,.55); padding-left:0; padding-top:16px; flex-direction:row; gap:1.2rem;}
+  .ticket-stub .no{writing-mode:horizontal-tb;}
+  .ticket-card::before,.ticket-card::after{display:none;}
+  .exhibit .frame img{height:var(--hm,38vh);}
+}
+@media (max-height:560px){
+  .exhibit .frame img{height:var(--h,62vh);}
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════ 1. ENTRANCE ════════════ -->
+<section class="screen active" id="entrance">
+  <div class="entrance-inner">
+    <div class="entrance-eyebrow">Now Admitting · Father's Day</div>
+    <h1 class="entrance-title">The Dad Museum</h1>
+    <div class="entrance-rule"></div>
+    <p class="entrance-sub">Four dads. Decades of memories. One admission test.</p>
+    <button class="btn" id="getTicketBtn">Get Your Ticket</button>
+  </div>
+</section>
+
+<!-- ════════════ 2. QUIZ ════════════ -->
+<section class="screen" id="quiz">
+  <div class="quiz-wrap">
+    <div class="quiz-top">
+      <span id="qCount">Question 1 / 8</span>
+      <span class="quiz-progress-track"><span class="quiz-progress-fill" id="qFill"></span></span>
+      <span id="qScore">Score 0</span>
+    </div>
+
+    <h2 class="quiz-q">Guess the Dad</h2>
+    <div class="quiz-main">
+      <div class="quiz-figure">
+        <div class="frame quiz-frame">
+          <div class="mat">
+            <div class="quiz-photo-port" id="qPort">
+              <img class="quiz-full" id="qFull" alt="The full photo, revealed" />
+              <img class="quiz-crop" id="qCrop" alt="A cropped clue from the collection" />
+              <span class="quiz-spot"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="quiz-side">
+        <p class="quiz-feedback" id="qFeedback"></p>
+        <div class="quiz-options" id="qOptions"></div>
+        <button class="btn quiz-next" id="qNext">Next Question</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════ RETRY ════════════ -->
+<section class="screen" id="retry">
+  <div class="retry-inner">
+    <div class="retry-stamp">Admission Denied</div>
+    <h2 class="retry-title">Admission denied… for now.</h2>
+    <p class="retry-sub">The museum requires at least 5 correct answers. Retake the exam to earn your ticket.</p>
+    <button class="btn" id="retakeBtn">Retake Exam</button>
+  </div>
+</section>
+
+<!-- ════════════ 3. TICKET ════════════ -->
+<section class="screen" id="ticket">
+  <div class="ticket-card">
+    <div class="ticket-main">
+      <div class="ticket-kicker">Valid only on Father's Day</div>
+      <div class="ticket-title">The Dad<br>Museum</div>
+      <div class="ticket-admit">Admit One</div>
+      <div class="ticket-line">Certified Dad Expert</div>
+      <div class="ticket-score" id="ticketScore">You scored 0 / 8</div>
+    </div>
+    <div class="ticket-stub">
+      <div class="ticket-stamp">Certified<br>Dad<br>Expert ★</div>
+      <div class="no">No. 0617</div>
+    </div>
+  </div>
+  <button class="btn" id="enterBtn">Enter Museum</button>
+</section>
+
+<!-- ════════════ 4. DOORS ════════════ -->
+<section class="screen" id="doors">
+  <div class="door-interior"></div>
+  <div class="door-scene">
+    <div class="door left"><span class="door-handle"></span></div>
+    <div class="door right"><span class="door-handle"></span></div>
+  </div>
+</section>
+
+<!-- ════════════ 5. PLAQUE ════════════ -->
+<section class="screen" id="plaque">
+  <div class="plaque-stand">
+    <div class="plaque-board">
+      <h2 class="plaque-title">Welcome to the Dad Museum</h2>
+      <div class="plaque-body">
+        <p>For years, these dads have been our chauffeurs, chefs, photographers, handymen, coaches, problem-solvers, and occasional comedians.</p>
+        <p>This collection celebrates the moments they gave us, the memories they helped create, and the countless ways they've shaped our lives.</p>
+        <p class="plaque-note">And remember: complaints can be directed to the dads. Refunds will be issued in the form of dad jokes.</p>
+      </div>
+    </div>
+    <div class="plaque-legs"></div>
+    <div class="plaque-base"></div>
+    <button class="btn" id="beginTourBtn">Begin Tour</button>
+  </div>
+</section>
+
+<!-- ════════════ 6. GALLERY ════════════ -->
+<section class="screen" id="gallery">
+  <div class="wall-scroll" id="wallScroll">
+    <div class="wall-track" id="wallTrack">
+      <div class="wall-floor"></div>
+      <!-- exhibits injected by JS, final piece appended last -->
+    </div>
+  </div>
+</section>
+
+<!-- permanent controls (outside .screen so they can sit above the wall) -->
+<div class="gallery-controls" id="galleryControls">
+  <button class="ctrl" id="prevBtn">← Previous</button>
+  <button class="ctrl" id="nextBtn">Next →</button>
+  <button class="ctrl" id="autoplayBtn">▶ Autoplay</button>
+  <button class="ctrl" id="musicBtn">♪ Music On</button>
+  <button class="ctrl final-btn" id="finalBtn">Final Message ❤️</button>
+</div>
+
+<!-- gallery walk-through music (starts only when the tour begins) -->
+<audio id="bgMusic" src="audio/photograph.mp3" loop preload="auto"></audio>
+
+<!-- ════════════ LIGHTBOX ════════════ -->
+<div id="lightbox">
+  <button class="lightbox-close" id="lightboxClose" aria-label="Close">✕</button>
+  <div class="frame lightbox-frame">
+    <div class="mat"><img id="lightboxImg" alt="Enlarged exhibit" /></div>
+  </div>
+  <div class="lightbox-label" id="lightboxLabel">Exhibit #1</div>
+</div>
+
+<!-- Photo data (regenerate with ./generate-data.sh) -->
+<script src="data.js"></script>
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   CONFIG — tweak the experience here
+   ══════════════════════════════════════════════════════════════════ */
+const CONFIG = {
+  QUESTIONS_PER_QUIZ: 8,     // questions per attempt (capped to how many exist)
+  PASS_SCORE: 5,             // correct answers needed to enter
+  REVEAL_MS: 1400,           // crop → full zoom-out duration
+  CROP_FADE_MS: 450,         // how fast the crop clue fades on reveal
+  AUTOPLAY_MS: 2000,         // gallery autoplay: time on each photo (museum slideshow pace)
+  // Default reveal zoom when a question has no cropX/cropY/cropScale of its own:
+  DEFAULT_CROP: { cropX: 50, cropY: 45, cropScale: 2.6 },
+};
+
+/* Optional per-question reveal tuning. The full photo starts zoomed into this
+   point/scale (to echo where the crop was taken from), then animates to scale 1.
+   Key by question id "Q<n>" (n = the q number in data.js). Everything is
+   optional — omit a question to use CONFIG.DEFAULT_CROP. Example:
+     "Q1": { cropX: 62, cropY: 48, cropScale: 2.8 }   */
+const CROP_META = {
+  // "Q1": { cropX: 62, cropY: 48, cropScale: 2.8 },
+};
+
+/* ══════════════════════════════════════════════════════════════════
+   DATA — loaded from data.js (window.MUSEUM_DATA)
+   ══════════════════════════════════════════════════════════════════ */
+const DATA = (window.MUSEUM_DATA) || {dads:[], quiz:[], gallery:[]};
+const DADS = DATA.dads || [];
+const QUIZ_POOL = DATA.quiz || [];
+const GALLERY = DATA.gallery || [];
+
+/* prettify a folder/answer name for display: "john" → "John", "dad-1" → "Dad 1".
+   (Display only — answer matching always uses the raw folder name.) */
+const pretty = (s) => String(s).replace(/[-_]+/g,' ').trim().replace(/\b\w/g,c=>c.toUpperCase());
+/* encode path so spaces / special chars in filenames work as URLs */
+const url = (p) => encodeURI(p);
+
+/* ── small helpers ── */
+const $ = (sel) => document.querySelector(sel);
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  return a;
+}
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active', s.id===id));
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   QUIZ
+   ══════════════════════════════════════════════════════════════════ */
+let quizSet = [];     // the 8 chosen questions for this attempt
+let qIndex = 0;
+let score = 0;
+let answered = false;
+
+function buildQuiz(){
+  qIndex = 0; score = 0;
+  // all questions (2 per dad → 8), shuffled, with no dad twice in a row
+  quizSet = spreadByDad(shuffle(QUIZ_POOL));
+  const n = Math.min(CONFIG.QUESTIONS_PER_QUIZ, quizSet.length);
+  quizSet = quizSet.slice(0, n);
+  renderQuestion();
+}
+
+/* Re-order a shuffled list so the same dad never appears back-to-back (unless
+   mathematically unavoidable). Keeps it random — just avoids clustering. */
+function spreadByDad(arr){
+  const rem = arr.slice();
+  const out = [];
+  while(rem.length){
+    let i = rem.findIndex(q => !out.length || q.answer !== out[out.length-1].answer);
+    if(i === -1) i = 0;                 // only same-dad left — unavoidable
+    out.push(rem.splice(i,1)[0]);
+  }
+  return out;
+}
+
+function optionsFor(answer){
+  // all four dad names, in a fresh random order every question
+  const others = shuffle(DADS.filter(d => d !== answer)).slice(0, 3);
+  return shuffle([answer, ...others]);
+}
+
+/* size the quiz frame to a photo's real aspect ratio so nothing is ever cropped
+   in the full reveal (portrait stays portrait, landscape stays landscape) */
+function applyPortAspect(natW, natH){
+  if(!natW || !natH) return;
+  const port = $('#qPort');
+  const W = window.innerWidth, H = window.innerHeight;
+  let maxW, maxH;
+  if(W >= 760){
+    // two-column layout: image sits beside the controls, so it can be taller
+    maxW = Math.min(W * 0.5, 600);
+    maxH = Math.min(H * 0.68, 640);
+  } else {
+    // stacked: keep room for title + feedback + answer buttons + Next button
+    maxW = Math.min(W * 0.9, 540);
+    maxH = Math.max(170, Math.min(H * 0.46, H - 470));
+  }
+  let w = maxW, h = w * natH / natW;
+  if(h > maxH){ h = maxH; w = h * natW / natH; }
+  port.style.width  = Math.round(w) + 'px';
+  port.style.height = Math.round(h) + 'px';
+}
+let fullDims = null;   // natural size of the current question's full photo
+// keep the quiz image fitted if the window/orientation changes
+window.addEventListener('resize', ()=>{
+  if($('#quiz').classList.contains('active') && fullDims) applyPortAspect(fullDims.w, fullDims.h);
+});
+
+function renderQuestion(){
+  answered = false;
+  const q = quizSet[qIndex];
+  const total = quizSet.length;
+
+  // progress + score
+  $('#qCount').textContent = `Question ${qIndex+1} / ${total}`;
+  $('#qScore').textContent = `Score ${score}`;
+  $('#qFill').style.width = `${(qIndex/total)*100}%`;
+
+  // show ONLY the cropped clue. The full photo is NOT put in the DOM yet, so it
+  // cannot be seen before answering. We preload it off-screen so the reveal is
+  // instant when it happens.
+  const port = $('#qPort');
+  port.classList.remove('revealed');
+  const full = $('#qFull');
+  full.removeAttribute('src');               // ensure nothing renders early
+  full.onload = null;
+  full.style.transition = 'none';
+  full.style.opacity = '0';
+  full.style.transform = 'scale(1)';
+  $('#qCrop').src = url(q.crop);
+
+  // size the frame to the full photo's aspect ratio (so the reveal never crops).
+  // Preloaded off-DOM so the full image is NOT visible before answering.
+  applyPortAspect(4, 3);                      // sensible placeholder until we know
+  fullDims = null;
+  const pre = new Image();
+  pre.onload = ()=>{
+    fullDims = { w: pre.naturalWidth, h: pre.naturalHeight };
+    if(!answered) applyPortAspect(fullDims.w, fullDims.h);
+  };
+  pre.src = url(q.full);
+
+  // restart entrance animation on the frame
+  const frame = document.querySelector('.quiz-frame');
+  frame.style.animation = 'none'; void frame.offsetWidth; frame.style.animation = '';
+
+  // feedback + hide the manual Next button until they answer
+  const fb = $('#qFeedback');
+  fb.className = 'quiz-feedback'; fb.innerHTML = '';
+  $('#qNext').classList.remove('show');
+
+  // options
+  const wrap = $('#qOptions');
+  wrap.innerHTML = '';
+  optionsFor(q.answer).forEach(name=>{
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.textContent = pretty(name);
+    b.dataset.name = name;
+    b.addEventListener('click', ()=>chooseAnswer(b, q));
+    wrap.appendChild(b);
+  });
+}
+
+function chooseAnswer(btn, q){
+  if(answered) return;
+  answered = true;
+  const correct = btn.dataset.name === q.answer;
+  if(correct) score++;
+
+  // mark buttons
+  document.querySelectorAll('#qOptions .opt').forEach(b=>{
+    b.disabled = true;
+    if(b.dataset.name === q.answer) b.classList.add('correct');
+    else if(b === btn) b.classList.add('incorrect');
+  });
+
+  // feedback — a clear two-line museum stamp naming the correct dad
+  const fb = $('#qFeedback');
+  const name = pretty(q.answer);
+  fb.innerHTML = correct
+    ? `<span class="fb-big">Correct!</span><span class="fb-sub">It was ${name}.</span>`
+    : `<span class="fb-big">Not quite…</span><span class="fb-sub">It was ${name}.</span>`;
+  fb.classList.add('show', correct ? 'right' : 'wrong');
+
+  // live score
+  $('#qScore').textContent = `Score ${score}`;
+
+  // reveal: zoom out from the crop region into the full photo
+  revealFull(q);
+
+  // NO auto-advance — let the user enjoy the photo, then move on manually
+  const next = $('#qNext');
+  next.textContent = (qIndex === quizSet.length - 1) ? 'See Results' : 'Next Question';
+  setTimeout(()=> next.classList.add('show'), 700);
+}
+
+/* The full photo enters already zoomed into the crop's region, then animates to
+   scale(1). The crop fades out quickly on top so the eye follows the zoom-out. */
+function revealFull(q){
+  const port = $('#qPort');
+  const full = $('#qFull');
+  const m = CROP_META['Q' + q.q] || {};
+  const cx = q.cropX ?? m.cropX ?? CONFIG.DEFAULT_CROP.cropX;
+  const cy = q.cropY ?? m.cropY ?? CONFIG.DEFAULT_CROP.cropY;
+  const cs = q.cropScale ?? m.cropScale ?? CONFIG.DEFAULT_CROP.cropScale;
+
+  $('#qCrop').style.transition = `opacity ${CONFIG.CROP_FADE_MS}ms ease`;
+
+  // make the frame hug the full photo's true aspect ratio before revealing
+  if(fullDims) applyPortAspect(fullDims.w, fullDims.h);
+  full.onload = ()=> applyPortAspect(full.naturalWidth, full.naturalHeight);
+
+  // 1) place the full image zoomed into the crop region (no transition yet)
+  full.style.transition = 'none';
+  full.style.transformOrigin = `${cx}% ${cy}%`;
+  full.style.transform = `scale(${cs})`;
+  full.style.opacity = '1';            // it's underneath the opaque crop, so still hidden
+  full.src = url(q.full);
+
+  // 2) flush that starting state, then animate the zoom-out + fade the crop away
+  void full.offsetWidth;               // force reflow so the transition has a start
+  full.style.transition = `transform ${CONFIG.REVEAL_MS}ms cubic-bezier(.22,.61,.36,1)`;
+  full.style.transform = 'scale(1)';
+  port.classList.add('revealed');      // fades the crop out (CSS .revealed)
+}
+
+function nextQuestion(){
+  qIndex++;
+  if(qIndex < quizSet.length){
+    renderQuestion();
+  } else {
+    finishQuiz();
+  }
+}
+
+function finishQuiz(){
+  $('#qFill').style.width = '100%';
+  if(score >= CONFIG.PASS_SCORE){
+    $('#ticketScore').textContent = `You scored ${score} / ${quizSet.length}`;
+    showScreen('ticket');
+  } else {
+    showScreen('retry');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   GALLERY WALL
+   ══════════════════════════════════════════════════════════════════ */
+// Height rhythm (some frames larger/smaller, higher/lower). The WIDTH comes from
+// each photo's own aspect ratio so nothing is cropped.
+const HSET   = ['46vh','52vh','42vh','48vh','40vh','50vh'];
+const HSETM  = ['38vh','42vh','34vh','40vh','33vh','41vh'];   // mobile
+const SHIFTS = ['0','-4vh','3vh','-2vh','2vh','-5vh'];        // vertical offsets
+
+function buildGallery(){
+  const track = $('#wallTrack');
+  // remove any previously injected exhibits (keep the floor element)
+  track.querySelectorAll('.exhibit').forEach(e=>e.remove());
+
+  const photos = shuffle(GALLERY);
+  photos.forEach((p, i)=>{
+    // support both {src,w,h} (current) and plain "src" string (older data.js)
+    const src = (typeof p === 'string') ? p : p.src;
+    const ar  = (p && p.w && p.h) ? (p.w / p.h) : 1.4;
+    const ex = document.createElement('div');
+    ex.className = 'exhibit';
+    ex.style.setProperty('--ar', ar);
+    ex.style.setProperty('--h',  HSET[i % HSET.length]);
+    ex.style.setProperty('--hm', HSETM[i % HSETM.length]);
+    ex.style.setProperty('--shift', SHIFTS[i % SHIFTS.length]);
+    ex.innerHTML =
+      `<div class="frame"><div class="mat">
+         <img src="${url(src)}" alt="Exhibit ${i+1}" loading="lazy" />
+       </div></div>`;
+    ex.querySelector('.frame').addEventListener('click', ()=>openLightbox(src, i+1));
+    track.appendChild(ex);
+  });
+
+  // ── final piece on the wall ──
+  const fin = document.createElement('div');
+  fin.className = 'exhibit final';
+  fin.style.setProperty('--shift','0');
+  fin.innerHTML =
+    `<div class="frame"><div class="mat final-piece">
+        <h2>Happy Father's Day</h2>
+        <p>To the dads who drove us places, supported us, embarrassed us, fed us,
+           taught us, and helped make us who we are today:</p>
+        <p class="final-thanks">Thank you. We love you.</p>
+        <p class="final-joke">Museum gift shop closed. Budget cuts.</p>
+        <button class="btn ghost" id="backToGalleryBtn">Back to Gallery</button>
+     </div></div>`;
+  track.appendChild(fin);
+  fin.querySelector('#backToGalleryBtn').addEventListener('click', ()=>goToIndex(0));
+
+  // register every exhibit (photos + final piece) for index-based navigation
+  exhibits = [...track.querySelectorAll('.exhibit')];
+  currentGalleryIndex = 0;
+}
+
+/* ── horizontal navigation (index-based, so no photo is ever skipped) ── */
+const wallScroll = () => $('#wallScroll');
+let exhibits = [];              // every .exhibit in order (final piece is last)
+let currentGalleryIndex = 0;
+let programmaticScroll = false; // true while a button-driven smooth scroll runs
+let progTimer = null, syncTimer = null;
+
+/* center exhibit i in the viewport */
+function goToIndex(i, behavior='smooth'){
+  if(!exhibits.length) return;
+  currentGalleryIndex = Math.max(0, Math.min(exhibits.length - 1, i));
+  const el = exhibits[currentGalleryIndex];
+  const sc = wallScroll();
+  const target = el.offsetLeft - (sc.clientWidth - el.offsetWidth) / 2;
+  programmaticScroll = true;
+  clearTimeout(progTimer);
+  progTimer = setTimeout(()=>{ programmaticScroll = false; }, 700);
+  sc.scrollTo({ left: Math.max(0, target), behavior });
+}
+function nudge(dir){
+  goToIndex(currentGalleryIndex + dir);   // Prev/Next: exactly one photo
+  if(autoplayOn) startAutoplay();          // manual nav keeps autoplay running (resets timer)
+}
+function jumpToFinal(){
+  goToIndex(exhibits.length - 1);          // last stop = final message
+  stopAutoplay();                          // reaching the final message stops autoplay
+}
+
+/* ── autoplay: advance one photo at a time, user-controlled ── */
+let autoplayOn = false, autoplayTimer = null;
+function setAutoplayLabel(){
+  const b = $('#autoplayBtn');
+  b.textContent = autoplayOn ? '⏸ Pause' : '▶ Autoplay';
+  b.classList.toggle('on', autoplayOn);
+}
+function startAutoplay(){
+  autoplayOn = true; setAutoplayLabel();
+  clearInterval(autoplayTimer);
+  autoplayTimer = setInterval(()=>{
+    if(currentGalleryIndex >= exhibits.length - 1){ stopAutoplay(); return; } // stop at final
+    goToIndex(currentGalleryIndex + 1);
+  }, CONFIG.AUTOPLAY_MS);
+}
+function stopAutoplay(){
+  autoplayOn = false; clearInterval(autoplayTimer); autoplayTimer = null; setAutoplayLabel();
+}
+function toggleAutoplay(){ autoplayOn ? stopAutoplay() : startAutoplay(); }
+
+/* keep the index in sync when the user drags / swipes freely */
+function syncIndexToScroll(){
+  if(programmaticScroll || !exhibits.length) return;
+  const sc = wallScroll();
+  const center = sc.scrollLeft + sc.clientWidth / 2;
+  let best = 0, bestD = Infinity;
+  exhibits.forEach((el,i)=>{
+    const c = el.offsetLeft + el.offsetWidth / 2;
+    const d = Math.abs(c - center);
+    if(d < bestD){ bestD = d; best = i; }
+  });
+  currentGalleryIndex = best;
+}
+
+/* drag-to-pan with the mouse (touch uses native scroll) */
+function enableDrag(){
+  const el = wallScroll();
+  let down=false, startX=0, startLeft=0, moved=false;
+  el.addEventListener('pointerdown', e=>{
+    if(e.pointerType!=='mouse') return;
+    down=true; moved=false; startX=e.clientX; startLeft=el.scrollLeft;
+    el.classList.add('dragging');
+  });
+  el.addEventListener('pointermove', e=>{
+    if(!down) return;
+    const dx = e.clientX - startX;
+    if(Math.abs(dx)>4) moved=true;
+    el.scrollLeft = startLeft - dx;
+  });
+  const end = ()=>{ down=false; el.classList.remove('dragging'); };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointerleave', end);
+  // suppress the click that follows a real drag (so it doesn't open the lightbox)
+  el.addEventListener('click', e=>{ if(moved){ e.stopPropagation(); e.preventDefault(); } }, true);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   LIGHTBOX
+   ══════════════════════════════════════════════════════════════════ */
+function openLightbox(src, n){
+  stopAutoplay();                          // opening a photo pauses autoplay
+  $('#lightboxImg').src = url(src);
+  $('#lightboxLabel').textContent = `Exhibit #${n}`;
+  $('#lightbox').classList.add('open');
+}
+function closeLightbox(){ $('#lightbox').classList.remove('open'); }
+
+/* ══════════════════════════════════════════════════════════════════
+   GALLERY MUSIC — background song for the walk-through.
+   Starts only when the tour begins (a user click), loops, toggle in controls.
+   NOT connected to autoplay.
+   ══════════════════════════════════════════════════════════════════ */
+const bgMusic = $('#bgMusic');
+bgMusic.volume = 0.3;                       // moderate
+let musicOn = false;
+function setMusicLabel(){
+  const b = $('#musicBtn');
+  b.textContent = musicOn ? '♪ Music Off' : '♪ Music On';
+  b.classList.toggle('on', musicOn);
+}
+function playMusic(){
+  bgMusic.play().then(()=>{ musicOn = true; setMusicLabel(); })
+    .catch(()=>{ musicOn = false; setMusicLabel(); }); // blocked → stays off until clicked
+}
+function pauseMusic(){ bgMusic.pause(); musicOn = false; setMusicLabel(); }
+function toggleMusic(){ musicOn ? pauseMusic() : playMusic(); }
+
+/* ══════════════════════════════════════════════════════════════════
+   DOOR TRANSITION  (ticket → doors → plaque)
+   ══════════════════════════════════════════════════════════════════ */
+function enterMuseum(){
+  showScreen('doors');
+  // build the wall now so it's ready behind the doors
+  buildGallery();
+  requestAnimationFrame(()=>{
+    setTimeout(()=>$('#doors').classList.add('go'), 120); // start opening
+    setTimeout(()=>{                                       // arrive at plaque
+      showScreen('plaque');
+      $('#doors').classList.remove('go');
+    }, 2600);
+  });
+}
+
+function beginTour(){
+  showScreen('gallery');
+  stopAutoplay();                          // autoplay starts OFF
+  playMusic();                             // music starts ON (this is a user click)
+  // land cleanly on the first exhibit once the wall has laid out
+  requestAnimationFrame(()=>{ currentGalleryIndex = 0; goToIndex(0, 'auto'); });
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   WIRING
+   ══════════════════════════════════════════════════════════════════ */
+$('#getTicketBtn').addEventListener('click', ()=>{ buildQuiz(); showScreen('quiz'); });
+$('#retakeBtn').addEventListener('click', ()=>{ buildQuiz(); showScreen('quiz'); });
+$('#enterBtn').addEventListener('click', enterMuseum);
+$('#beginTourBtn').addEventListener('click', beginTour);
+
+$('#qNext').addEventListener('click', ()=>{ $('#qNext').classList.remove('show'); nextQuestion(); });
+
+$('#prevBtn').addEventListener('click', ()=>nudge(-1));
+$('#nextBtn').addEventListener('click', ()=>nudge(1));
+$('#autoplayBtn').addEventListener('click', toggleAutoplay);
+$('#musicBtn').addEventListener('click', toggleMusic);
+$('#finalBtn').addEventListener('click', jumpToFinal);
+
+$('#lightboxClose').addEventListener('click', closeLightbox);
+$('#lightbox').addEventListener('click', e=>{ if(e.target.id==='lightbox') closeLightbox(); });
+
+/* keyboard: gallery arrows + Esc closes lightbox */
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){ closeLightbox(); return; }
+  const galleryActive = $('#gallery').classList.contains('active');
+  const lbOpen = $('#lightbox').classList.contains('open');
+  if(galleryActive && !lbOpen){
+    if(e.key==='ArrowRight') nudge(1);
+    if(e.key==='ArrowLeft')  nudge(-1);
+  }
+});
+
+enableDrag();
+
+/* keep the current index in sync after free drag/swipe so Prev/Next stay exact */
+wallScroll().addEventListener('scroll', ()=>{
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncIndexToScroll, 150);
+});
+
+/* graceful note if no data was loaded */
+if(QUIZ_POOL.length === 0){
+  $('#entrance .entrance-sub').textContent =
+    'No photos found yet — add them to images/quiz/<dad>/ and run ./generate-data.sh';
+}
+</script>
+</body>
+</html>
