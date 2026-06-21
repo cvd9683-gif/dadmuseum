@@ -43,7 +43,7 @@ images/
       q6-crop.png
       q6-full.jpg
     Santosh/   (q2, q8)
-    Thushar/   (q3, q5)
+    Tushar/   (q3, q5)
     Vinayak/   (q4, q7)
   gallery/     ← every other photo, shown on the wall (g001.jpg, g002.jpg, …)
 ```
@@ -54,7 +54,7 @@ it smoothly zooms out to `q1-full.jpg`. The dad whose folder the pair lives in
 is the correct answer. The four answer buttons are simply the four folder names.
 
 Currently set up from your folders: **8 questions** (q1–q8) across
-**john, Santosh, Thushar, Vinayak**, plus **99** gallery photos.
+**john, Santosh, Tushar, Vinayak**, plus **99** gallery photos.
 
 ### To change the quiz
 1. In `images/quiz/<DadName>/`, add a matching pair: `qN-crop.png` (clue) and
