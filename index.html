@@ -752,13 +752,25 @@ let quizSet = [];     // the 8 chosen questions for this attempt
 let qIndex = 0;
 let score = 0;
 let answered = false;
+let renderSeq = 0;    // bumped on every render → invalidates stale async image callbacks
 
 function buildQuiz(){
-  qIndex = 0; score = 0;
-  // all questions (2 per dad → 8), shuffled, with no dad twice in a row
-  quizSet = spreadByDad(shuffle(QUIZ_POOL));
+  qIndex = 0; score = 0; answered = false;
+  // all questions (2 per dad → 8), shuffled, with no dad twice in a row.
+  // De-dupe by question id first so an attempt can never contain a repeat.
+  const seen = new Set();
+  const unique = QUIZ_POOL.filter(q => !seen.has(q.q) && seen.add(q.q));
+  quizSet = spreadByDad(shuffle(unique));
   const n = Math.min(CONFIG.QUESTIONS_PER_QUIZ, quizSet.length);
   quizSet = quizSet.slice(0, n);
+
+  // warm the cache so the first crop pops in instantly (no half-painted flash)
+  quizSet.forEach(q => { new Image().src = url(q.crop); });
+  if(quizSet[0]) new Image().src = url(quizSet[0].full);
+
+  // debug: should print exactly 8 unique ids, e.g. [3,1,5,...]
+  console.log('Quiz order (q ids):', quizSet.map(q => q.q));
+
   renderQuestion();
 }
 
@@ -809,6 +821,7 @@ window.addEventListener('resize', ()=>{
 });
 
 function renderQuestion(){
+  const seq = ++renderSeq;    // any pending onload from an earlier question is now stale
   answered = false;
   const q = quizSet[qIndex];
   const total = quizSet.length;
@@ -818,25 +831,57 @@ function renderQuestion(){
   $('#qScore').textContent = `Score ${score}`;
   $('#qFill').style.width = `${(qIndex/total)*100}%`;
 
-  // show ONLY the cropped clue. The full photo is NOT put in the DOM yet, so it
-  // cannot be seen before answering. We preload it off-screen so the reveal is
-  // instant when it happens.
   const port = $('#qPort');
-  port.classList.remove('revealed');
+  const crop = $('#qCrop');
   const full = $('#qFull');
-  full.removeAttribute('src');               // ensure nothing renders early
+  const fb   = $('#qFeedback');
+  const next = $('#qNext');
+
+  // ── HARD RESET the previous question's UI with transitions OFF, so nothing
+  //    from the last question can linger or fade on top of this one (no two
+  //    images, no leftover feedback, no stale Next button) ──
+  port.classList.remove('revealed');
+
+  // full reveal image: clear it completely — it must never be visible pre-answer
   full.onload = null;
   full.style.transition = 'none';
   full.style.opacity = '0';
   full.style.transform = 'scale(1)';
-  $('#qCrop').src = url(q.crop);
+  full.removeAttribute('src');
 
-  // size the frame to the full photo's aspect ratio (so the reveal never crops).
+  // crop clue: hide it now; we reveal it only once it has fully decoded (below),
+  // so the user never sees a half-painted PNG or the previous question's crop
+  crop.onload = null;
+  crop.style.transition = 'none';
+  crop.style.opacity = '0';
+
+  // feedback + Next button: clear INSTANTLY (no leftover fade onto the new question)
+  fb.style.transition = 'none';
+  fb.className = 'quiz-feedback';
+  fb.innerHTML = '';
+  next.style.transition = 'none';
+  next.classList.remove('show');
+
+  // flush the reset as the starting state, then re-enable transitions
+  void port.offsetWidth;
+  fb.style.transition = '';
+  next.style.transition = '';
+
+  // load the crop and fade it in only when decoded AND still the current question
+  crop.onload = ()=>{
+    if(seq !== renderSeq) return;            // a newer question already rendered
+    crop.style.transition = 'opacity .25s ease';
+    crop.style.opacity = '1';
+  };
+  crop.src = url(q.crop);
+
+  // size the frame to the FULL photo's aspect ratio (so the reveal never crops).
   // Preloaded off-DOM so the full image is NOT visible before answering.
   applyPortAspect(4, 3);                      // sensible placeholder until we know
   fullDims = null;
   const pre = new Image();
   pre.onload = ()=>{
+    if(seq !== renderSeq) return;            // stale preload from a previous question
     fullDims = { w: pre.naturalWidth, h: pre.naturalHeight };
     if(!answered) applyPortAspect(fullDims.w, fullDims.h);
   };
@@ -846,12 +891,7 @@ function renderQuestion(){
   const frame = document.querySelector('.quiz-frame');
   frame.style.animation = 'none'; void frame.offsetWidth; frame.style.animation = '';
 
-  // feedback + hide the manual Next button until they answer
-  const fb = $('#qFeedback');
-  fb.className = 'quiz-feedback'; fb.innerHTML = '';
-  $('#qNext').classList.remove('show');
-
-  // options
+  // options — rebuilt fresh every question, so no stale click handlers survive
   const wrap = $('#qOptions');
   wrap.innerHTML = '';
   optionsFor(q.answer).forEach(name=>{
@@ -865,8 +905,9 @@ function renderQuestion(){
 }
 
 function chooseAnswer(btn, q){
-  if(answered) return;
+  if(answered) return;          // locked after first answer — ignore extra clicks
   answered = true;
+  const seq = renderSeq;        // tie this answer to the current question
   const correct = btn.dataset.name === q.answer;
   if(correct) score++;
 
@@ -891,27 +932,32 @@ function chooseAnswer(btn, q){
   // reveal: zoom out from the crop region into the full photo
   revealFull(q);
 
-  // NO auto-advance — let the user enjoy the photo, then move on manually
+  // NO auto-advance — let the user enjoy the photo, then move on manually.
+  // The seq guard stops a late timer from revealing Next on the NEXT question.
   const next = $('#qNext');
   next.textContent = (qIndex === quizSet.length - 1) ? 'See Results' : 'Next Question';
-  setTimeout(()=> next.classList.add('show'), 700);
+  setTimeout(()=>{ if(seq === renderSeq) next.classList.add('show'); }, 700);
 }
 
 /* The full photo enters already zoomed into the crop's region, then animates to
    scale(1). The crop fades out quickly on top so the eye follows the zoom-out. */
 function revealFull(q){
+  const seq = renderSeq;               // reveal belongs to the current question only
   const port = $('#qPort');
+  const crop = $('#qCrop');
   const full = $('#qFull');
   const m = CROP_META['Q' + q.q] || {};
   const cx = q.cropX ?? m.cropX ?? CONFIG.DEFAULT_CROP.cropX;
   const cy = q.cropY ?? m.cropY ?? CONFIG.DEFAULT_CROP.cropY;
   const cs = q.cropScale ?? m.cropScale ?? CONFIG.DEFAULT_CROP.cropScale;
 
-  $('#qCrop').style.transition = `opacity ${CONFIG.CROP_FADE_MS}ms ease`;
+  // fade the crop clue out (inline — we control crop opacity per-question)
+  crop.style.transition = `opacity ${CONFIG.CROP_FADE_MS}ms ease`;
+  crop.style.opacity = '0';
 
   // make the frame hug the full photo's true aspect ratio before revealing
   if(fullDims) applyPortAspect(fullDims.w, fullDims.h);
-  full.onload = ()=> applyPortAspect(full.naturalWidth, full.naturalHeight);
+  full.onload = ()=>{ if(seq === renderSeq) applyPortAspect(full.naturalWidth, full.naturalHeight); };
 
   // 1) place the full image zoomed into the crop region (no transition yet)
   full.style.transition = 'none';
